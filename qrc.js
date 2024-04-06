@@ -2,38 +2,67 @@ var net = require('net');
 
 var client = new net.Socket();
 var client_connected = false;
+client.setEncoding('utf8');
 
 var messageIndex = 0;
 var responseQueue = {};
 
+const nt = "\x00"
+var rtnBuffer = "";
+let rtn;
+
+const endOfResponse = (input) => input[input.length - 2] == "}";
 // Handle server responses
 client.on('data', function(data) {
 
-  console.log(data.toString()); return;
-  
-  // Parse
-  data = data.toString().slice(0, -1); // remove null
-  data = JSON.parse(data); // parse JSON
+  //log real time data stream to console
+  // console.log(data.toString()); 
 
-  // Check ID exists
-  if(!data.id) { console.error('No ID present on JSONRPC message!', data); return; }
-
-  // Get callback
-  var cb = responseQueue[data.id];
-  if(!cb) { console.error('No callback for received message!', data); return; }
-
-  if(data.result) {
-    cb(data.result, null); // call with no error
-  } else if(data.error) {
-    cb(null, data.error)
+  if (endOfResponse(data)) {
+    if (rtnBuffer != "") {
+      rtnBuffer += data;
+      for (let str of rtnBuffer.split(nt)) {
+        try {
+          str && JSON.parse(str).result ? rtn = JSON.parse(str) : null;
+        } catch (e) {
+          console.log(`error parsing JSON with ${e}, on this string:\n\n${str}`);
+        }
+      }
+    }
   } else {
-    cb(null, {
-      code: -1,
-      message: 'Invalid response from server.'
-    });
+    rtnBuffer += data
+    // console.log(rtnBuffer)
+  }
+ 
+  // rtn ? console.log(rtn) : null
+
+  if (rtn) {
+    // console.log(rtn);
+    //changing "data" to return to copy op's rest of code
+    data = rtn;
+    // Check ID exists
+    if(!data.id) { console.error('No ID present on JSONRPC message!', data); return; }
+
+    // Get callback
+    var cb = responseQueue[data.id];
+    if(!cb) { console.error('No callback for received message!', data); return; }
+
+    if(data.result) {
+      cb(data.result, null); // call with no error
+    } else if(data.error) {
+      cb(null, data.error)
+    } else {
+      cb(null, {
+        code: -1,
+        message: 'Invalid response from server.'
+      });
+    }
   }
 
+  return rtn;
 });
+
+
 
 client.on('close', function() {
   console.log('Connection closed');
@@ -70,7 +99,7 @@ function call(method, params) {
       "id": messageIndex
     });
 
-    console.log(json);
+    // console.log(json);
 
     // Send request
     client.write(json+'\0');
@@ -119,7 +148,7 @@ module.exports = {
     },
   },
   'Component': {
-    'Get': function(name, controls) {
+    'Get': async function(name, controls) {
       if(typeof controls != 'Array') { controls = [controls]; } // handle single-item requests
       controls = controls.map(function(n) { return { 'Name': n }; });
       return call('Component.Get', { 'Name': name, 'Controls': controls });
@@ -199,7 +228,7 @@ module.exports = {
 
       // Zones
       if(typeof zones != 'Array' && typeof zones != 'object') { console.log(typeof zones); return; }
-      if(parseInt(zones[0]) != NaN) { options.Zones = zones; options.ZoneTags = []; } else { options.ZoneTags = zones; options.Zones = []; }
+      if(parsef(zones[0]) != NaN) { options.Zones = zones; options.ZoneTags = []; } else { options.ZoneTags = zones; options.Zones = []; }
 
       // Merge options
       for(i in user_options) {

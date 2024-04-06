@@ -1,12 +1,17 @@
 var qrc = require('./qrc');
 
-var i = 0;
 
-qrc.Connect('10.0.0.11')
-  .then(function() {
+
+const test = async () => {
+  qrc.Connect('192.168.42.148')
+  .then(async function() {
     console.log('Connected!');
-    setInterval(function() {
-      i = (i+0.01)%1
-      qrc.Call('Control.Set', {"Name": "source_level", "Position": i });
-    }, 0.1);
+    qrc.Logon("QSC","5678");
+    console.log(await qrc.Component.GetComponents());
   });
+};
+
+test();
+
+
+
